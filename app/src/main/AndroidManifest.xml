@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Pleos Vehicle SDK (protectionLevel=normal: 선언만 하면 됨) -->
+    <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />        <!-- 브레이크, 주행거리, 크루즈, 기어 -->
+    <uses-permission android:name="pleos.car.permission.CAR_SPEED" />        <!-- 차량 속도 -->
+    <uses-permission android:name="pleos.car.permission.CAR_SAFETY" />       <!-- 안전벨트 미착용 경고 -->
+    <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />       <!-- 방향지시등, 앰비언트 라이트 -->
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_LIGHTS" />
+    <uses-permission android:name="pleos.car.permission.CAR_MILEAGE" />
+    <uses-permission android:name="pleos.car.permission.CAR_INFO" />
+    <uses-permission android:name="pleos.car.permission.CAR_POWERTRAIN" />
+    <uses-permission android:name="pleos.car.permission.READ_CAR_STEERING" /> <!-- 핸들 각도 -->
+    <uses-permission android:name="pleos.car.permission.READ_ADAS_STATES" />
+
+    <!-- NaviHelper (제한속도, 주의구간, 단속카메라) -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
+    <!-- FusedLocation (dangerous: 런타임 요청) -->
+    <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
+    <!-- AAOS 표준 차량 속성으로 속도 읽기 시도 -->
+    <uses-permission android:name="android.car.permission.CAR_SPEED" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 음성 (TTS/STT) -->
+    <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
+    <uses-permission android:name="pleos.car.permission.STT_SERVICE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:name=".BungApp"
+        android:theme="@style/Theme.Bungbungi">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+</manifest>
