@@ -6,7 +6,7 @@ enum class Stage(val label: String, val minScore: Int, val look: String) {
     GRUMPY("까칠", 40, "찡그린 눈썹, 흐린 색, 작은 흠집"),
     NORMAL("보통", 60, "무표정, 기본 색"),
     GENTLE("순둥", 75, "둥글고 웃는 눈, 밝은 색"),
-    ANGEL("천사", 90, "반짝이는 눈, 헤드라이트 하트, 파스텔 색, 날개");
+    ANGEL("천사", 90, "반짝이는 눈, 파스텔 색, 날개와 링");
 
     companion object {
         fun forScore(score: Double): Stage = entries.last { score >= it.minScore }

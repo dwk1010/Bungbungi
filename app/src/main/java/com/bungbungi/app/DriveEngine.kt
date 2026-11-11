@@ -56,6 +56,8 @@ data class EngineState(
     /** 아직 보여주지 않은 진화·퇴화 */
     val pendingChange: StageChange? = null,
     val lastFinishedTrip: TripRecord? = null,
+    /** 아바타의 바탕 차종 (운전자 차량) */
+    val model: com.bungbungi.app.logic.CarModel = com.bungbungi.app.logic.CarModel.AVANTE,
     /** 최근 8초 안에 위반이 있었음 (아바타 어지러움, 조명 주황) */
     val upset: Boolean = false,
 )
@@ -93,7 +95,7 @@ class DriveEngine(private val context: Context) {
         val trips = store.loadTrips()
         val avatar = AvatarEngine.evaluate(store.loadAvatar(now()), trips, now())
         store.saveAvatar(avatar)
-        _state.value = EngineState(now = now(), trips = trips, avatar = avatar)
+        _state.value = EngineState(now = now(), trips = trips, avatar = avatar, model = store.carModel)
         vehicle.start()
         probes.start()
         navi.start()
@@ -286,10 +288,19 @@ class DriveEngine(private val context: Context) {
 
     fun reset() {
         demoJob?.cancel(); demoFrame = null
+        val model = store.carModel
         store.clear()
-        _state.value = EngineState(now = now(), avatar = AvatarState(now()))
+        store.carModel = model
+        _state.value = EngineState(now = now(), avatar = AvatarState(now()), model = model)
         store.saveAvatar(_state.value.avatar)
         hub.log("기록 초기화")
+    }
+
+    /** 내 차 차종 바꾸기. 실차에서는 차량 정보(CarInfo)로 자동 선택할 수 있다. */
+    fun setModel(model: com.bungbungi.app.logic.CarModel) {
+        store.carModel = model
+        _state.update { it.copy(model = model) }
+        hub.log("내 차: ${model.label}")
     }
 
     fun askMood() {

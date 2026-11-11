@@ -21,6 +21,10 @@ class Store(context: Context) {
         get() = prefs.getLong("clockOffset", 0)
         set(v) = prefs.edit().putLong("clockOffset", v).apply()
 
+    var carModel: com.bungbungi.app.logic.CarModel
+        get() = runCatching { com.bungbungi.app.logic.CarModel.valueOf(prefs.getString("carModel", "AVANTE")!!) }.getOrDefault(com.bungbungi.app.logic.CarModel.AVANTE)
+        set(v) = prefs.edit().putString("carModel", v.name).apply()
+
     fun loadTrips(): List<TripRecord> {
         val arr = JSONArray(prefs.getString("trips", "[]"))
         return (0 until arr.length()).map { i ->

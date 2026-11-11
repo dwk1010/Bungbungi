@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
 import com.bungbungi.app.logic.AvatarPart
+import com.bungbungi.app.logic.CarModel
 import com.bungbungi.app.logic.Stage
 import kotlin.math.PI
 import kotlin.math.abs
@@ -87,9 +88,9 @@ private val GlassTop = Color(0xFFF7FCFF)
 private val GlassBottom = Color(0xFFCFE6F7)
 private const val TAU = (2.0 * PI).toFloat()
 
-/** 차 모양 아바타(정면). 단계와 부위(주된 위반)에 따라 얼굴·장식이 바뀐다. */
+/** 차 모양 아바타(정면). 차종에 따라 차체·램프·그릴이, 단계와 부위(주된 위반)에 따라 얼굴·장식이 바뀐다. */
 @Composable
-fun CarAvatar(stage: Stage, part: AvatarPart, mood: Mood, modifier: Modifier = Modifier) {
+fun CarAvatar(stage: Stage, part: AvatarPart, mood: Mood, modifier: Modifier = Modifier, model: CarModel = CarModel.AVANTE) {
     val anim = rememberInfiniteTransition(label = "avatar")
     val bob by anim.animateFloat(
         0f, 1f, infiniteRepeatable(tween(1700, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "bob",
@@ -102,7 +103,7 @@ fun CarAvatar(stage: Stage, part: AvatarPart, mood: Mood, modifier: Modifier = M
         translate(size.width / 2f, size.height / 2f + u * 0.7f) {
             drawBackGlow(u, AvatarColors.paletteOf(stage), stage)
             drawGroundShadow(u, bob)
-            translate(shake, lift) { drawCar(u, stage, part, mood, cycle) }
+            translate(shake, lift) { drawCar(u, stage, part, mood, cycle, model) }
         }
     }
 }
@@ -134,17 +135,42 @@ private fun DrawScope.drawGroundShadow(u: Float, bob: Float) {
     }
 }
 
-private fun DrawScope.drawCar(u: Float, stage: Stage, part: AvatarPart, mood: Mood, cycle: Float) {
+/** 차종별 앞모습 비율 (단위 u) */
+private class CarShape(
+    val roofY: Float, val roofHalf: Float, val cabinHalf: Float,
+    val bodyHalf: Float, val bodyTop: Float, val bodyBottom: Float, val corner: Float,
+    val tireBottom: Float, val suv: Boolean,
+)
+
+private fun shapeOf(model: CarModel): CarShape = when (model) {
+    CarModel.AVANTE -> CarShape(-2.7f, 1.35f, 2.75f, 3.6f, -0.5f, 2.35f, 0.8f, 2.95f, false)
+    CarModel.SONATA -> CarShape(-2.78f, 1.45f, 2.8f, 3.6f, -0.5f, 2.35f, 1.05f, 2.95f, false)
+    CarModel.TUCSON -> CarShape(-3.2f, 1.55f, 2.8f, 3.5f, -0.6f, 2.5f, 0.95f, 3.15f, true)
+    CarModel.SANTAFE -> CarShape(-3.25f, 2.2f, 2.72f, 3.5f, -0.6f, 2.5f, 0.5f, 3.15f, true)
+}
+
+private fun cabinPath(u: Float, half: Float, roofHalf: Float, roofY: Float, bottomY: Float) = Path().apply {
+    val c2x = minOf(roofHalf + 0.95f, half - 0.1f)
+    moveTo(-u * half, u * bottomY)
+    cubicTo(-u * (half - 0.15f), u * (roofY + 0.88f), -u * c2x, u * (roofY + 0.06f), -u * roofHalf, u * roofY)
+    lineTo(u * roofHalf, u * roofY)
+    cubicTo(u * c2x, u * (roofY + 0.06f), u * (half - 0.15f), u * (roofY + 0.88f), u * half, u * bottomY)
+    close()
+}
+
+private fun DrawScope.drawCar(u: Float, stage: Stage, part: AvatarPart, mood: Mood, cycle: Float, model: CarModel) {
     val p = AvatarColors.paletteOf(stage)
+    val sh = shapeOf(model)
     val line = p.line
     val outline = Stroke(width = u * 0.085f, join = StrokeJoin.Round, cap = StrokeCap.Round)
     val wave = sin(cycle * TAU)
     val wild = stage == Stage.WILD
     val smoky = part == AvatarPart.EXHAUST_SMOKE || wild
+    val roofDy = u * (sh.roofY + 3.08f) // 지붕 장식 위치 보정
 
     // ── 뒤쪽 장식 ──
     if (smoky) drawSmoke(u, cycle)
-    if (wild) drawBackFlames(u, cycle)
+    if (wild) translate(0f, roofDy) { drawBackFlames(u, cycle) }
     if (stage == Stage.ANGEL) {
         drawWing(u, -1f, wave)
         drawWing(u, 1f, wave)
@@ -152,234 +178,344 @@ private fun DrawScope.drawCar(u: Float, stage: Stage, part: AvatarPart, mood: Mo
 
     // ── 타이어 ──
     listOf(-1f, 1f).forEach { s ->
-        val left = if (s < 0) -u * 3.05f else u * 1.95f
+        val left = if (s < 0) -u * (sh.bodyHalf - 0.4f) else u * (sh.bodyHalf - 1.5f)
+        val h = u * (sh.tireBottom - 1.5f)
         drawRoundRect(
-            Brush.verticalGradient(listOf(Color(0xFF4A4A52), Color(0xFF17171B)), startY = u * 1.5f, endY = u * 3.0f),
-            Offset(left, u * 1.5f), Size(u * 1.1f, u * 1.5f), CornerRadius(u * 0.38f),
+            Brush.verticalGradient(listOf(Color(0xFF4A4A52), Color(0xFF17171B)), startY = u * 1.5f, endY = u * sh.tireBottom),
+            Offset(left, u * 1.5f), Size(u * 1.1f, h), CornerRadius(u * 0.38f),
         )
         for (i in 0 until 3) { // 트레드
-            val y = u * (2.45f + i * 0.17f)
+            val y = u * (sh.tireBottom - 0.55f + i * 0.17f)
             drawLine(Color(0xFF05050A).copy(alpha = 0.6f), Offset(left + u * 0.18f, y), Offset(left + u * 0.92f, y), u * 0.05f)
         }
     }
 
+    // ── 루프랙 (SUV) ──
+    if (sh.suv) listOf(-1f, 1f).forEach { s ->
+        val x = if (s < 0) -u * (sh.roofHalf - 0.05f) else u * (sh.roofHalf - 0.95f)
+        drawRoundRect(Color(0xFF2B2B33), Offset(x, u * (sh.roofY - 0.2f)), Size(u * 0.9f, u * 0.3f), CornerRadius(u * 0.1f))
+    }
+
     // ── 사이드미러 ──
     listOf(-1f, 1f).forEach { s ->
-        val c = Offset(s * u * 3.02f, -u * 0.78f)
-        drawLine(line, Offset(s * u * 2.5f, -u * 0.5f), c, u * 0.16f, StrokeCap.Round)
+        val c = Offset(s * u * (sh.cabinHalf + 0.25f), u * (sh.bodyTop - 0.23f))
+        drawLine(line, Offset(s * u * (sh.cabinHalf - 0.3f), u * (sh.bodyTop + 0.05f)), c, u * 0.16f, StrokeCap.Round)
         val tl = c - Offset(u * 0.42f, u * 0.3f)
         drawOval(Brush.verticalGradient(listOf(p.light, p.dark), startY = tl.y, endY = tl.y + u * 0.6f), tl, Size(u * 0.84f, u * 0.6f))
         drawOval(line, tl, Size(u * 0.84f, u * 0.6f), style = outline)
     }
 
     // ── 지붕(캐빈) ──
-    val cabin = Path().apply {
-        moveTo(-u * 2.8f, -u * 0.2f)
-        cubicTo(-u * 2.65f, -u * 2.2f, -u * 2.25f, -u * 3.02f, -u * 1.3f, -u * 3.08f)
-        lineTo(u * 1.3f, -u * 3.08f)
-        cubicTo(u * 2.25f, -u * 3.02f, u * 2.65f, -u * 2.2f, u * 2.8f, -u * 0.2f)
-        close()
-    }
-    drawPath(cabin, Brush.verticalGradient(listOf(p.light, p.base, p.dark), startY = -u * 3.1f, endY = -u * 0.2f))
+    val cabin = cabinPath(u, sh.cabinHalf, sh.roofHalf, sh.roofY, sh.bodyTop + 0.35f)
+    drawPath(cabin, Brush.verticalGradient(listOf(p.light, p.base, p.dark), startY = u * sh.roofY, endY = u * (sh.bodyTop + 0.35f)))
     drawPath(cabin, line, style = outline)
-    drawLine(Color.White.copy(alpha = 0.55f), Offset(-u * 1.15f, -u * 2.9f), Offset(u * 0.2f, -u * 2.9f), u * 0.09f, StrokeCap.Round)
+    drawLine(
+        Color.White.copy(alpha = 0.55f), Offset(-u * (sh.roofHalf - 0.15f), u * (sh.roofY + 0.18f)),
+        Offset(u * 0.2f, u * (sh.roofY + 0.18f)), u * 0.09f, StrokeCap.Round,
+    )
 
     // ── 앞유리 ──
-    val glass = Path().apply {
-        moveTo(-u * 2.32f, -u * 0.42f)
-        cubicTo(-u * 2.22f, -u * 1.9f, -u * 1.95f, -u * 2.6f, -u * 1.15f, -u * 2.66f)
-        lineTo(u * 1.15f, -u * 2.66f)
-        cubicTo(u * 1.95f, -u * 2.6f, u * 2.22f, -u * 1.9f, u * 2.32f, -u * 0.42f)
-        close()
-    }
+    val glass = cabinPath(u, sh.cabinHalf - 0.48f, sh.roofHalf - 0.15f, sh.roofY + 0.42f, sh.bodyTop + 0.13f)
     val glassColors = if (wild) listOf(Color(0xFFFFE3D6), Color(0xFFE8A994)) else listOf(GlassTop, GlassBottom)
-    drawPath(glass, Brush.verticalGradient(glassColors, startY = -u * 2.7f, endY = -u * 0.4f))
+    drawPath(glass, Brush.verticalGradient(glassColors, startY = u * (sh.roofY + 0.4f), endY = u * sh.bodyTop))
     clipPath(glass) {
-        // 유리 반사
-        val streak = Path().apply {
-            moveTo(-u * 2.4f, -u * 1.2f); lineTo(-u * 1.2f, -u * 2.8f); lineTo(-u * 0.75f, -u * 2.8f); lineTo(-u * 2.4f, -u * 0.6f); close()
-        }
-        drawPath(streak, Color.White.copy(alpha = 0.55f))
-        val streak2 = Path().apply {
-            moveTo(-u * 2.4f, -u * 0.3f); lineTo(-u * 0.5f, -u * 2.8f); lineTo(-u * 0.32f, -u * 2.8f); lineTo(-u * 2.4f, -u * 0.05f); close()
-        }
-        drawPath(streak2, Color.White.copy(alpha = 0.35f))
-        if (wild || stage == Stage.GRUMPY) { // 금 간 유리
-            val crack = Path().apply {
-                moveTo(u * 2.3f, -u * 2.2f); lineTo(u * 1.75f, -u * 1.95f); lineTo(u * 1.95f, -u * 1.6f); lineTo(u * 1.5f, -u * 1.35f)
-                moveTo(u * 1.75f, -u * 1.95f); lineTo(u * 1.45f, -u * 2.25f)
+        translate(0f, roofDy) {
+            // 유리 반사
+            val streak = Path().apply {
+                moveTo(-u * 2.6f, -u * 1.2f); lineTo(-u * 1.2f, -u * 2.9f); lineTo(-u * 0.75f, -u * 2.9f); lineTo(-u * 2.6f, -u * 0.6f); close()
             }
-            drawPath(crack, Color.White.copy(alpha = 0.9f), style = Stroke(u * 0.05f, join = StrokeJoin.Round))
-            drawPath(crack, line.copy(alpha = 0.35f), style = Stroke(u * 0.02f))
+            drawPath(streak, Color.White.copy(alpha = 0.55f))
+            val streak2 = Path().apply {
+                moveTo(-u * 2.6f, -u * 0.1f); lineTo(-u * 0.5f, -u * 2.9f); lineTo(-u * 0.32f, -u * 2.9f); lineTo(-u * 2.6f, u * 0.15f); close()
+            }
+            drawPath(streak2, Color.White.copy(alpha = 0.35f))
+            if (wild || stage == Stage.GRUMPY) { // 금 간 유리
+                val crack = Path().apply {
+                    moveTo(u * 2.3f, -u * 2.2f); lineTo(u * 1.75f, -u * 1.95f); lineTo(u * 1.95f, -u * 1.6f); lineTo(u * 1.5f, -u * 1.35f)
+                    moveTo(u * 1.75f, -u * 1.95f); lineTo(u * 1.45f, -u * 2.25f)
+                }
+                drawPath(crack, Color.White.copy(alpha = 0.9f), style = Stroke(u * 0.05f, join = StrokeJoin.Round))
+                drawPath(crack, line.copy(alpha = 0.35f), style = Stroke(u * 0.02f))
+            }
         }
     }
     drawPath(glass, line, style = Stroke(u * 0.06f, join = StrokeJoin.Round))
 
     // ── 눈 ──
-    drawEyes(u, stage, part, mood, cycle)
+    drawEyes(u, stage, part, mood, cycle, u * ((sh.roofY + sh.bodyTop) / 2f + 0.3f))
 
     // ── 차체 ──
-    val bodyTop = -u * 0.55f
-    val bodySize = Size(u * 6.9f, u * 3.0f)
-    val bodyTl = Offset(-u * 3.45f, bodyTop)
+    val bodySize = Size(u * sh.bodyHalf * 2f, u * (sh.bodyBottom - sh.bodyTop))
+    val bodyTl = Offset(-u * sh.bodyHalf, u * sh.bodyTop)
     drawRoundRect(
-        Brush.verticalGradient(listOf(p.light, p.base, p.base, p.dark), startY = bodyTop, endY = bodyTop + bodySize.height),
-        bodyTl, bodySize, CornerRadius(u * 1.15f),
+        Brush.verticalGradient(listOf(p.light, p.base, p.base, p.dark), startY = bodyTl.y, endY = bodyTl.y + bodySize.height),
+        bodyTl, bodySize, CornerRadius(u * sh.corner),
     )
     // 보닛 하이라이트
-    drawRoundRect(Color.White.copy(alpha = 0.42f), Offset(-u * 2.5f, bodyTop + u * 0.16f), Size(u * 5.0f, u * 0.24f), CornerRadius(u * 0.12f))
-    rotate(-28f, Offset(-u * 2.95f, u * 0.05f)) {
-        drawOval(Color.White.copy(alpha = 0.5f), Offset(-u * 3.13f, -u * 0.2f), Size(u * 0.36f, u * 0.7f))
-    }
-    drawRoundRect(line, bodyTl, bodySize, CornerRadius(u * 1.15f), style = outline)
+    drawRoundRect(
+        Color.White.copy(alpha = 0.42f), Offset(-u * (sh.bodyHalf - 0.95f), bodyTl.y + u * 0.16f),
+        Size(u * (sh.bodyHalf - 0.95f) * 2f, u * 0.22f), CornerRadius(u * 0.11f),
+    )
+    drawRoundRect(line, bodyTl, bodySize, CornerRadius(u * sh.corner), style = outline)
+
+    val mouthY = u * (sh.bodyTop + 1.08f)
+    val lampY = sh.bodyTop + 1.0f
+    val bumperTop = sh.bodyBottom - 0.6f
+    val grilleTop = 1.22f
+    val grilleBottom = bumperTop - 0.08f
 
     // 볼터치
     if (stage == Stage.ANGEL || stage == Stage.GENTLE) {
         listOf(-1f, 1f).forEach { s ->
-            val c = Offset(s * u * 1.45f, u * 1.02f)
+            val c = Offset(s * u * 1.28f, mouthY + u * 0.3f)
             val pink = Color(0xFFFF7FAE)
             scale(1f, 0.6f, pivot = c) {
-                drawCircle(Brush.radialGradient(listOf(pink.copy(alpha = 0.75f), pink.copy(alpha = 0f)), center = c, radius = u * 0.5f), u * 0.5f, c)
+                drawCircle(Brush.radialGradient(listOf(pink.copy(alpha = 0.75f), pink.copy(alpha = 0f)), center = c, radius = u * 0.45f), u * 0.45f, c)
             }
         }
     }
 
-    // ── 헤드라이트 ──
-    drawHeadlight(u, -1f, stage, p, wave)
-    drawHeadlight(u, 1f, stage, p, wave)
+    // ── 그릴·램프 (차종별) ──
+    drawGrille(u, model, line, grilleTop, grilleBottom)
+    drawLamps(u, model, stage, p, wave, lampY, sh.bodyHalf, grilleTop, grilleBottom)
 
     // ── 입 ──
-    drawMouth(u, stage, mood)
+    drawMouth(u, stage, mood, mouthY)
 
     // ── 범퍼 ──
-    val dented = part == AvatarPart.DENTED_BUMPER || wild
-    val bumperBrush = Brush.verticalGradient(listOf(p.bumperTop, p.bumperBottom), startY = u * 1.72f, endY = u * 2.3f)
-    if (dented) {
-        val bp = Path().apply {
-            moveTo(-u * 3.0f, u * 1.9f)
-            lineTo(-u * 1.7f, u * 1.74f); lineTo(-u * 1.25f, u * 2.0f); lineTo(-u * 0.75f, u * 1.72f)
-            lineTo(u * 2.85f, u * 1.72f)
-            cubicTo(u * 3.1f, u * 1.72f, u * 3.1f, u * 2.3f, u * 2.85f, u * 2.3f)
-            lineTo(-u * 2.8f, u * 2.36f)
-            cubicTo(-u * 3.1f, u * 2.36f, -u * 3.15f, u * 1.95f, -u * 3.0f, u * 1.9f)
-            close()
+    translate(0f, u * (bumperTop - 1.72f)) {
+        val dented = part == AvatarPart.DENTED_BUMPER || wild
+        val bumperBrush = Brush.verticalGradient(listOf(p.bumperTop, p.bumperBottom), startY = u * 1.72f, endY = u * 2.3f)
+        if (dented) {
+            val bp = Path().apply {
+                moveTo(-u * 3.0f, u * 1.9f)
+                lineTo(-u * 1.7f, u * 1.74f); lineTo(-u * 1.25f, u * 2.0f); lineTo(-u * 0.75f, u * 1.72f)
+                lineTo(u * 2.85f, u * 1.72f)
+                cubicTo(u * 3.1f, u * 1.72f, u * 3.1f, u * 2.24f, u * 2.85f, u * 2.24f)
+                lineTo(-u * 2.8f, u * 2.28f)
+                cubicTo(-u * 3.1f, u * 2.28f, -u * 3.15f, u * 1.95f, -u * 3.0f, u * 1.9f)
+                close()
+            }
+            drawPath(bp, bumperBrush)
+            drawPath(bp, line, style = Stroke(u * 0.06f, join = StrokeJoin.Round))
+            val cracks = Path().apply {
+                moveTo(-u * 1.25f, u * 2.0f); lineTo(-u * 1.4f, u * 2.15f)
+                moveTo(-u * 1.25f, u * 2.0f); lineTo(-u * 1.0f, u * 2.12f)
+            }
+            drawPath(cracks, line, style = Stroke(u * 0.05f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        } else {
+            drawRoundRect(bumperBrush, Offset(-u * 3.02f, u * 1.72f), Size(u * 6.04f, u * 0.52f), CornerRadius(u * 0.26f))
+            drawRoundRect(line, Offset(-u * 3.02f, u * 1.72f), Size(u * 6.04f, u * 0.52f), CornerRadius(u * 0.26f), style = Stroke(u * 0.06f))
+            drawLine(Color.White.copy(alpha = 0.7f), Offset(-u * 2.6f, u * 1.83f), Offset(u * 2.6f, u * 1.83f), u * 0.06f, StrokeCap.Round)
         }
-        drawPath(bp, bumperBrush)
-        drawPath(bp, line, style = Stroke(u * 0.06f, join = StrokeJoin.Round))
-        val cracks = Path().apply {
-            moveTo(-u * 1.25f, u * 2.0f); lineTo(-u * 1.4f, u * 2.2f); lineTo(-u * 1.2f, u * 2.32f)
-            moveTo(-u * 1.25f, u * 2.0f); lineTo(-u * 1.0f, u * 2.15f)
+        // 번호판
+        val plateTl = Offset(-u * 0.6f, u * 1.79f)
+        drawRoundRect(Color.White, plateTl, Size(u * 1.2f, u * 0.38f), CornerRadius(u * 0.08f))
+        drawRoundRect(line.copy(alpha = 0.7f), plateTl, Size(u * 1.2f, u * 0.38f), CornerRadius(u * 0.08f), style = Stroke(u * 0.04f))
+        when (stage) {
+            Stage.ANGEL, Stage.GENTLE -> drawHeart(Offset(0f, u * 1.99f), u * 0.12f, Color(0xFFFF5C9A))
+            Stage.WILD -> {
+                drawLine(Color(0xFFD92B1E), Offset(-u * 0.12f, u * 1.89f), Offset(u * 0.12f, u * 2.07f), u * 0.06f, StrokeCap.Round)
+                drawLine(Color(0xFFD92B1E), Offset(u * 0.12f, u * 1.89f), Offset(-u * 0.12f, u * 2.07f), u * 0.06f, StrokeCap.Round)
+            }
+            else -> for (i in -1..1) drawCircle(line.copy(alpha = 0.55f), u * 0.05f, Offset(i * u * 0.26f, u * 1.98f))
         }
-        drawPath(cracks, line, style = Stroke(u * 0.05f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    } else {
-        drawRoundRect(bumperBrush, Offset(-u * 3.02f, u * 1.72f), Size(u * 6.04f, u * 0.58f), CornerRadius(u * 0.29f))
-        drawRoundRect(line, Offset(-u * 3.02f, u * 1.72f), Size(u * 6.04f, u * 0.58f), CornerRadius(u * 0.29f), style = Stroke(u * 0.06f))
-        drawLine(Color.White.copy(alpha = 0.7f), Offset(-u * 2.6f, u * 1.84f), Offset(u * 2.6f, u * 1.84f), u * 0.06f, StrokeCap.Round)
-    }
-    // 번호판
-    val plateTl = Offset(-u * 0.6f, u * 1.82f)
-    drawRoundRect(Color.White, plateTl, Size(u * 1.2f, u * 0.4f), CornerRadius(u * 0.08f))
-    drawRoundRect(line.copy(alpha = 0.7f), plateTl, Size(u * 1.2f, u * 0.4f), CornerRadius(u * 0.08f), style = Stroke(u * 0.04f))
-    when (stage) {
-        Stage.ANGEL, Stage.GENTLE -> drawHeart(Offset(0f, u * 2.03f), u * 0.13f, Color(0xFFFF5C9A))
-        Stage.WILD -> {
-            drawLine(Color(0xFFD92B1E), Offset(-u * 0.13f, u * 1.92f), Offset(u * 0.13f, u * 2.12f), u * 0.06f, StrokeCap.Round)
-            drawLine(Color(0xFFD92B1E), Offset(u * 0.13f, u * 1.92f), Offset(-u * 0.13f, u * 2.12f), u * 0.06f, StrokeCap.Round)
-        }
-        else -> for (i in -1..1) drawCircle(line.copy(alpha = 0.55f), u * 0.055f, Offset(i * u * 0.26f, u * 2.02f))
     }
 
     // ── 앞쪽 장식·부위 ──
-    if (part == AvatarPart.SIDE_SCRATCH || stage == Stage.GRUMPY || wild) {
-        drawScratches(u, line, if (part == AvatarPart.SIDE_SCRATCH) 4 else 2)
+    translate(0f, u * (sh.bodyTop + 0.55f)) {
+        if (part == AvatarPart.SIDE_SCRATCH || stage == Stage.GRUMPY || wild) {
+            drawScratches(u, line, if (part == AvatarPart.SIDE_SCRATCH) 4 else 2)
+        }
+        if (stage == Stage.GRUMPY || wild) drawBandage(u)
     }
-    if (stage == Stage.GRUMPY || wild) drawBandage(u)
     if (part == AvatarPart.LOOSE_BELT) drawLooseBelt(u, wave)
-    when (stage) {
-        Stage.ANGEL -> {
-            drawHalo(u, wave)
-            val spots = listOf(
-                Triple(-4.4f, -2.9f, 0.42f), Triple(4.3f, -3.3f, 0.5f), Triple(2.9f, -4.1f, 0.3f),
-                Triple(-3.2f, -4.0f, 0.26f), Triple(4.9f, 1.9f, 0.3f), Triple(-5.0f, 1.6f, 0.34f),
-            )
-            spots.forEachIndexed { i, (x, y, r) ->
-                val a = (sin((cycle + i / 6f) * TAU * 2f) + 1f) / 2f
-                drawSparkle(Offset(x * u, y * u), u * r * (0.55f + 0.45f * a), Color(0xFFFFE892).copy(alpha = 0.35f + 0.65f * a))
+    translate(0f, roofDy) {
+        when (stage) {
+            Stage.ANGEL -> drawHalo(u, wave)
+            Stage.GENTLE -> drawFlower(u, Offset(u * 1.25f, -u * 3.45f), wave)
+            Stage.NORMAL -> {
+                drawLine(line, Offset(u * 1.3f, -u * 3.05f), Offset(u * 1.65f, -u * 3.85f), u * 0.07f, StrokeCap.Round)
+                drawCircle(Color(0xFFFFC94D), u * 0.17f, Offset(u * 1.65f, -u * 3.85f))
+                drawCircle(line, u * 0.17f, Offset(u * 1.65f, -u * 3.85f), style = Stroke(u * 0.05f))
             }
-        }
-        Stage.GENTLE -> drawFlower(u, Offset(u * 1.55f, -u * 3.45f), wave)
-        Stage.NORMAL -> {
-            drawLine(line, Offset(u * 1.6f, -u * 3.0f), Offset(u * 1.95f, -u * 3.85f), u * 0.07f, StrokeCap.Round)
-            drawCircle(Color(0xFFFFC94D), u * 0.17f, Offset(u * 1.95f, -u * 3.85f))
-            drawCircle(line, u * 0.17f, Offset(u * 1.95f, -u * 3.85f), style = Stroke(u * 0.05f))
-        }
-        Stage.GRUMPY -> drawAngerMark(u, Offset(u * 2.75f, -u * 3.0f), 0.9f + 0.1f * wave)
-        Stage.WILD -> {
-            listOf(-1f, 1f).forEach { s -> // 뿔
-                val horn = Path().apply {
-                    moveTo(s * u * 1.0f, -u * 3.05f); lineTo(s * u * 1.75f, -u * 4.05f); lineTo(s * u * 1.9f, -u * 2.95f); close()
+            Stage.GRUMPY -> drawAngerMark(u, Offset(u * 2.9f, -u * 3.0f), 0.9f + 0.1f * wave)
+            Stage.WILD -> {
+                listOf(-1f, 1f).forEach { s -> // 뿔
+                    val horn = Path().apply {
+                        moveTo(s * u * 0.7f, -u * 3.05f); lineTo(s * u * 1.3f, -u * 4.0f); lineTo(s * u * 1.5f, -u * 3.0f); close()
+                    }
+                    drawPath(horn, Brush.verticalGradient(listOf(Color(0xFFFFE0A3), Color(0xFFB8451F)), startY = -u * 4.0f, endY = -u * 3.0f))
+                    drawPath(horn, line, style = Stroke(u * 0.07f, join = StrokeJoin.Round))
                 }
-                drawPath(horn, Brush.verticalGradient(listOf(Color(0xFFFFE0A3), Color(0xFFB8451F)), startY = -u * 4.05f, endY = -u * 2.95f))
-                drawPath(horn, line, style = Stroke(u * 0.07f, join = StrokeJoin.Round))
+                drawAngerMark(u, Offset(u * 3.3f, -u * 2.5f), 1f + 0.12f * wave)
             }
-            drawAngerMark(u, Offset(u * 3.3f, -u * 2.5f), 1f + 0.12f * wave)
+        }
+    }
+    if (stage == Stage.ANGEL) {
+        val spots = listOf(
+            Triple(-4.4f, -2.9f, 0.42f), Triple(4.3f, -3.3f, 0.5f), Triple(2.9f, -4.1f, 0.3f),
+            Triple(-3.2f, -4.0f, 0.26f), Triple(4.9f, 1.9f, 0.3f), Triple(-5.0f, 1.6f, 0.34f),
+        )
+        spots.forEachIndexed { i, (x, y, r) ->
+            val a = (sin((cycle + i / 6f) * TAU * 2f) + 1f) / 2f
+            drawSparkle(Offset(x * u, y * u), u * r * (0.55f + 0.45f * a), Color(0xFFFFE892).copy(alpha = 0.35f + 0.65f * a))
         }
     }
     if (mood == Mood.SLEEPY) drawZzz(u, cycle)
 }
 
-private fun DrawScope.drawHeadlight(u: Float, s: Float, stage: Stage, p: Palette, wave: Float) {
-    val c = Offset(s * u * 2.42f, u * 0.72f)
-    val r = u * 0.52f
-    val baseAlpha = when (stage) {
-        Stage.GRUMPY -> 0.15f
-        Stage.WILD -> 0.55f
-        else -> 0.4f
+// ───────────────────────────── 차종별 그릴·램프 ─────────────────────────────
+
+private val GrilleDark = Color(0xFF16161C)
+private val GrilleMid = Color(0xFF34343E)
+
+private fun DrawScope.drawGrille(u: Float, model: CarModel, line: Color, top: Float, bottom: Float) {
+    val brush = Brush.verticalGradient(listOf(GrilleMid, GrilleDark), startY = u * top, endY = u * bottom)
+    val h = bottom - top
+    when (model) {
+        CarModel.AVANTE -> { // 넓게 퍼진 파라메트릭 그릴
+            val g = Path().apply {
+                moveTo(-u * 2.85f, u * top); lineTo(u * 2.85f, u * top); lineTo(u * 2.3f, u * bottom); lineTo(-u * 2.3f, u * bottom); close()
+            }
+            drawPath(g, brush)
+            clipPath(g) {
+                for (row in 0 until 3) for (col in -9..9) { // 보석 무늬
+                    val cx = u * (col * 0.34f + if (row % 2 == 0) 0f else 0.17f)
+                    val cy = u * (top + h * (row + 0.5f) / 3f)
+                    val d = Path().apply {
+                        moveTo(cx - u * 0.12f, cy); lineTo(cx, cy - u * 0.06f); lineTo(cx + u * 0.12f, cy); lineTo(cx, cy + u * 0.06f); close()
+                    }
+                    drawPath(d, Color(0xFF8A8A96).copy(alpha = 0.75f))
+                }
+            }
+            drawPath(g, line, style = Stroke(u * 0.06f, join = StrokeJoin.Round))
+        }
+        CarModel.SONATA -> { // 낮고 넓은 가로줄 그릴
+            val tl = Offset(-u * 2.6f, u * top)
+            val sz = Size(u * 5.2f, u * h)
+            drawRoundRect(brush, tl, sz, CornerRadius(u * 0.22f))
+            for (i in 1..3) {
+                val y = u * (top + h * i / 4f)
+                drawLine(Color(0xFF8A8A96).copy(alpha = 0.8f), Offset(-u * 2.35f, y), Offset(u * 2.35f, y), u * 0.045f, StrokeCap.Round)
+            }
+            drawRoundRect(line, tl, sz, CornerRadius(u * 0.22f), style = Stroke(u * 0.06f))
+        }
+        CarModel.TUCSON -> { // 날개 모양 파라메트릭 쥬얼 그릴
+            val g = Path().apply {
+                moveTo(-u * 3.05f, u * (top - 0.12f)); lineTo(u * 3.05f, u * (top - 0.12f))
+                lineTo(u * 2.35f, u * bottom); lineTo(-u * 2.35f, u * bottom); close()
+            }
+            drawPath(g, brush)
+            clipPath(g) {
+                for (row in 0 until 3) for (col in -8..8) {
+                    val x = u * (col * 0.4f + row * 0.1f)
+                    val y = u * (top - 0.1f + (h + 0.1f) * row / 3f)
+                    val cell = Path().apply {
+                        moveTo(x - u * 0.13f, y + u * 0.05f); lineTo(x + u * 0.17f, y + u * 0.05f)
+                        lineTo(x + u * 0.11f, y + u * (h / 3f)); lineTo(x - u * 0.19f, y + u * (h / 3f)); close()
+                    }
+                    drawPath(cell, Color(0xFF7D7D89).copy(alpha = 0.7f))
+                }
+            }
+            drawPath(g, line, style = Stroke(u * 0.06f, join = StrokeJoin.Round))
+        }
+        CarModel.SANTAFE -> { // 네모난 그릴
+            val tl = Offset(-u * 2.05f, u * top)
+            val sz = Size(u * 4.1f, u * h)
+            drawRoundRect(brush, tl, sz, CornerRadius(u * 0.1f))
+            for (row in 0 until 2) for (col in 0 until 7) {
+                val x = -u * 1.93f + col * u * 0.56f
+                val y = u * (top + 0.08f + row * (h - 0.1f) / 2f)
+                drawRoundRect(Color(0xFF7D7D89).copy(alpha = 0.7f), Offset(x, y), Size(u * 0.46f, u * ((h - 0.1f) / 2f - 0.07f)), CornerRadius(u * 0.04f))
+            }
+            drawRoundRect(line, tl, sz, CornerRadius(u * 0.1f), style = Stroke(u * 0.06f))
+        }
     }
-    val glowAlpha = baseAlpha * (0.85f + 0.15f * wave)
-    drawCircle(Brush.radialGradient(listOf(p.lamp.copy(alpha = glowAlpha), p.lamp.copy(alpha = 0f)), center = c, radius = r * 2.2f), r * 2.2f, c)
-    drawCircle(Color.White, r, c)
-    when (stage) {
-        Stage.ANGEL -> {
-            drawCircle(Brush.radialGradient(listOf(Color.White, Color(0xFFFFE3EE)), center = c, radius = r), r, c)
-            drawHeart(c + Offset(0f, u * 0.02f), r * 0.72f, Color(0xFFFF5C9A))
-        }
-        Stage.WILD -> {
-            drawCircle(Brush.radialGradient(listOf(Color(0xFFFFE08A), Color(0xFFFF5A1F), Color(0xFFB81B10)), center = c, radius = r), r, c)
-            drawCircle(Color(0xFF2A0606), r * 0.22f, c + Offset(0f, r * 0.15f))
-        }
-        Stage.GRUMPY -> drawCircle(Brush.radialGradient(listOf(Color(0xFFF3ECD0), Color(0xFFBFB07A)), center = c, radius = r), r, c)
-        else -> {
-            drawCircle(
-                Brush.radialGradient(listOf(Color.White, Color(0xFFFFF4B8), Color(0xFFFFD766)), center = c + Offset(-r * 0.25f, -r * 0.25f), radius = r * 1.3f),
-                r, c,
-            )
-            drawCircle(Color.White.copy(alpha = 0.95f), r * 0.22f, c + Offset(-r * 0.32f, -r * 0.32f))
-        }
+}
+
+private fun DrawScope.drawLamps(
+    u: Float, model: CarModel, stage: Stage, p: Palette, wave: Float,
+    lampY: Float, bodyHalf: Float, grilleTop: Float, grilleBottom: Float,
+) {
+    val colors = when (stage) {
+        Stage.ANGEL -> listOf(Color.White, Color(0xFFFFC4DC))
+        Stage.WILD -> listOf(Color(0xFFFFE08A), Color(0xFFFF4A1F))
+        Stage.GRUMPY -> listOf(Color(0xFFEDE6C8), Color(0xFFB9AA78))
+        else -> listOf(Color.White, Color(0xFFFFE680))
     }
-    drawCircle(p.line, r, c, style = Stroke(u * 0.07f))
-    // 화난·졸린 눈꺼풀
-    if (stage == Stage.WILD || stage == Stage.GRUMPY) {
-        val tilt = if (stage == Stage.WILD) 0.55f else 0.12f
-        val lid = Path().apply {
-            moveTo(c.x - s * r * 1.25f, c.y - r * 1.25f)
-            lineTo(c.x + s * r * 1.25f, c.y - r * 1.25f)
-            lineTo(c.x + s * r * 1.25f, c.y - r * (0.25f + tilt))
-            lineTo(c.x - s * r * 1.25f, c.y - r * (0.25f - tilt))
-            close()
+    val glowAlpha = (if (stage == Stage.GRUMPY) 0.15f else 0.45f) * (0.85f + 0.15f * wave)
+    fun glow(c: Offset, r: Float) = drawCircle(
+        Brush.radialGradient(listOf(p.lamp.copy(alpha = glowAlpha), p.lamp.copy(alpha = 0f)), center = c, radius = r), r, c,
+    )
+    val line = p.line
+    val y = lampY
+    when (model) {
+        CarModel.AVANTE -> listOf(-1f, 1f).forEach { s -> // 날렵하게 치켜 올라간 램프
+            glow(Offset(s * u * 2.6f, u * (y + 0.05f)), u * 1.1f)
+            val lamp = Path().apply {
+                moveTo(s * u * (bodyHalf - 0.22f), u * (y - 0.42f)); lineTo(s * u * 1.72f, u * (y - 0.02f))
+                lineTo(s * u * 1.98f, u * (y + 0.3f)); lineTo(s * u * (bodyHalf - 0.3f), u * (y + 0.22f)); close()
+            }
+            drawPath(lamp, Brush.verticalGradient(colors, startY = u * (y - 0.42f), endY = u * (y + 0.3f)))
+            drawPath(lamp, line, style = Stroke(u * 0.07f, join = StrokeJoin.Round))
+            drawLine(Color.White, Offset(s * u * (bodyHalf - 0.4f), u * (y - 0.27f)), Offset(s * u * 1.95f, u * (y + 0.02f)), u * 0.07f, StrokeCap.Round)
+            drawCircle(Color.White.copy(alpha = 0.9f), u * 0.1f, Offset(s * u * 2.75f, u * (y + 0.07f)))
         }
-        drawPath(lid, p.base)
-        drawLine(
-            p.line, Offset(c.x - s * r * 1.2f, c.y - r * (0.25f - tilt)), Offset(c.x + s * r * 1.2f, c.y - r * (0.25f + tilt)),
-            u * 0.09f, StrokeCap.Round,
-        )
+        CarModel.SONATA -> { // 좌우를 잇는 수평 라이트 바
+            val barTl = Offset(-u * (bodyHalf - 0.5f), u * (y - 0.52f))
+            val barSz = Size(u * (bodyHalf - 0.5f) * 2f, u * 0.17f)
+            drawRoundRect(p.lamp.copy(alpha = glowAlpha * 0.8f), barTl - Offset(0f, u * 0.1f), Size(barSz.width, u * 0.37f), CornerRadius(u * 0.18f))
+            drawRoundRect(Brush.horizontalGradient(listOf(colors[1], Color.White, colors[1]), startX = barTl.x, endX = barTl.x + barSz.width), barTl, barSz, CornerRadius(u * 0.085f))
+            drawRoundRect(line, barTl, barSz, CornerRadius(u * 0.085f), style = Stroke(u * 0.045f))
+            listOf(-1f, 1f).forEach { s ->
+                val tl = Offset(if (s < 0) -u * (bodyHalf - 0.42f) else u * (bodyHalf - 1.42f), u * (y - 0.12f))
+                glow(tl + Offset(u * 0.5f, u * 0.2f), u * 0.9f)
+                drawRoundRect(Brush.verticalGradient(colors, startY = tl.y, endY = tl.y + u * 0.42f), tl, Size(u * 1.0f, u * 0.42f), CornerRadius(u * 0.14f))
+                drawRoundRect(line, tl, Size(u * 1.0f, u * 0.42f), CornerRadius(u * 0.14f), style = Stroke(u * 0.06f))
+                drawCircle(Color.White.copy(alpha = 0.9f), u * 0.09f, tl + Offset(u * 0.3f, u * 0.15f))
+            }
+        }
+        CarModel.TUCSON -> listOf(-1f, 1f).forEach { s -> // 그릴 양 끝에 숨은 날개 모양 주간주행등
+            val h = (grilleBottom - grilleTop + 0.12f) / 3f
+            glow(Offset(s * u * 2.5f, u * (grilleTop + 0.3f)), u * 1.1f)
+            for (row in 0 until 3) {
+                val top = grilleTop - 0.1f + row * h
+                val outer = 2.95f - row * 0.22f
+                val n = 3 - row
+                for (k in 0 until n) {
+                    val x0 = outer - k * 0.4f
+                    val seg = Path().apply {
+                        moveTo(s * u * x0, u * (top + 0.04f)); lineTo(s * u * (x0 - 0.32f), u * (top + 0.04f))
+                        lineTo(s * u * (x0 - 0.4f), u * (top + h - 0.03f)); lineTo(s * u * (x0 - 0.08f), u * (top + h - 0.03f)); close()
+                    }
+                    drawPath(seg, Brush.verticalGradient(colors, startY = u * top, endY = u * (top + h)))
+                }
+            }
+            // 아래쪽 헤드램프
+            val c = Offset(s * u * (bodyHalf - 0.75f), u * (y - 0.1f))
+            drawOval(Brush.verticalGradient(colors, startY = c.y - u * 0.2f, endY = c.y + u * 0.2f), c - Offset(u * 0.42f, u * 0.2f), Size(u * 0.84f, u * 0.4f))
+            drawOval(line, c - Offset(u * 0.42f, u * 0.2f), Size(u * 0.84f, u * 0.4f), style = Stroke(u * 0.06f))
+        }
+        CarModel.SANTAFE -> { // H 모양 램프
+            listOf(-1f, 1f).forEach { s ->
+                val c = Offset(s * u * (bodyHalf - 0.95f), u * (y - 0.02f))
+                glow(c, u * 1.15f)
+                val tl = c - Offset(u * 0.62f, u * 0.5f)
+                drawRoundRect(Color(0xFF1B1B22), tl, Size(u * 1.24f, u * 1.0f), CornerRadius(u * 0.14f))
+                drawRoundRect(line, tl, Size(u * 1.24f, u * 1.0f), CornerRadius(u * 0.14f), style = Stroke(u * 0.06f))
+                val b = Brush.verticalGradient(colors, startY = tl.y, endY = tl.y + u)
+                drawRoundRect(b, tl + Offset(u * 0.14f, u * 0.12f), Size(u * 0.24f, u * 0.76f), CornerRadius(u * 0.06f))
+                drawRoundRect(b, tl + Offset(u * 0.86f, u * 0.12f), Size(u * 0.24f, u * 0.76f), CornerRadius(u * 0.06f))
+                drawRoundRect(b, tl + Offset(u * 0.3f, u * 0.4f), Size(u * 0.64f, u * 0.2f), CornerRadius(u * 0.05f))
+            }
+        }
     }
 }
 
 // ───────────────────────────── 얼굴 ─────────────────────────────
 
-private fun DrawScope.drawEyes(u: Float, stage: Stage, part: AvatarPart, mood: Mood, cycle: Float) {
-    val eyeY = -u * 1.5f
+private fun DrawScope.drawEyes(u: Float, stage: Stage, part: AvatarPart, mood: Mood, cycle: Float, eyeY: Float) {
     val eyes = listOf(Offset(-u * 0.95f, eyeY) to -1f, Offset(u * 0.95f, eyeY) to 1f)
     // 깜빡임: 4초 주기의 마지막 0.24초
     val blinkT = ((cycle - 0.94f) / 0.06f).coerceIn(0f, 1f)
@@ -445,8 +581,7 @@ private fun DrawScope.drawEyes(u: Float, stage: Stage, part: AvatarPart, mood: M
     }
 }
 
-private fun DrawScope.drawMouth(u: Float, stage: Stage, mood: Mood) {
-    val y = u * 0.98f
+private fun DrawScope.drawMouth(u: Float, stage: Stage, mood: Mood, y: Float) {
     when {
         mood == Mood.DIZZY -> {
             val p = Path().apply {
@@ -557,16 +692,16 @@ private fun DrawScope.drawAngerMark(u: Float, c: Offset, k: Float) {
 
 private fun DrawScope.drawScratches(u: Float, line: Color, n: Int) {
     for (i in 0 until n) {
-        val x = -u * (2.05f - i * 0.3f)
-        val a = Offset(x, -u * 0.12f)
-        val b = Offset(x + u * 0.42f, u * 0.5f)
+        val x = -u * (1.5f - i * 0.28f)
+        val a = Offset(x, -u * 0.42f)
+        val b = Offset(x + u * 0.3f, u * 0.02f)
         drawLine(Color.White.copy(alpha = 0.55f), a + Offset(u * 0.05f, 0f), b + Offset(u * 0.05f, 0f), u * 0.05f, StrokeCap.Round)
         drawLine(line.copy(alpha = 0.8f), a, b, u * 0.06f, StrokeCap.Round)
     }
 }
 
 private fun DrawScope.drawBandage(u: Float) {
-    val c = Offset(u * 1.25f, u * 0.05f)
+    val c = Offset(u * 0.95f, -u * 0.12f)
     listOf(-32f, 32f).forEach { deg ->
         rotate(deg, c) {
             val tl = c - Offset(u * 0.52f, u * 0.15f)

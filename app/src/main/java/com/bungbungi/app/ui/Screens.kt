@@ -51,6 +51,7 @@ import com.bungbungi.app.EngineState
 import com.bungbungi.app.demo.Scenarios
 import com.bungbungi.app.logic.AvatarEngine
 import com.bungbungi.app.logic.AvatarPart
+import com.bungbungi.app.logic.CarModel
 import com.bungbungi.app.logic.Scoring
 import com.bungbungi.app.logic.Stage
 import com.bungbungi.app.logic.StageChange
@@ -95,12 +96,12 @@ fun BungApp(engine: DriveEngine, state: EngineState, signals: VehicleSignals, lo
             when (tab) {
                 Tab.HOME -> HomeScreen(engine, state)
                 Tab.DRIVE -> DriveScreen(engine, state)
-                Tab.BOOK -> BookScreen(state)
+                Tab.BOOK -> BookScreen(engine, state)
                 Tab.TRIPS -> TripsScreen(state)
                 Tab.SIGNALS -> SignalsScreen(state, signals, log)
                 Tab.DEMO -> DemoScreen(engine, state, log)
             }
-            state.pendingChange?.let { ChangeOverlay(it, state.avatar.part) { engine.consumeChange() } }
+            state.pendingChange?.let { ChangeOverlay(it, state.avatar.part, state.model) { engine.consumeChange() } }
         }
     }
 }
@@ -125,7 +126,7 @@ fun AvatarFor(state: EngineState, modifier: Modifier, mood: Mood = Mood.CALM) {
         val progress = ((state.now - a.installMillis).toFloat() / total).coerceIn(0f, 1f)
         EggAvatar(AvatarEngine.currentScore(state.trips, state.now), progress, modifier)
     } else {
-        CarAvatar(a.stage, a.part, if (a.resting) Mood.SLEEPY else mood, modifier)
+        CarAvatar(a.stage, a.part, if (a.resting) Mood.SLEEPY else mood, modifier, state.model)
     }
 }
 
@@ -253,19 +254,30 @@ private fun DriveScreen(engine: DriveEngine, state: EngineState) {
 }
 
 @Composable
-private fun BookScreen(state: EngineState) {
+private fun BookScreen(engine: DriveEngine, state: EngineState) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Big("붕붕이 도감")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Small("내 차")
+            CarModel.entries.forEach { m ->
+                val sel = m == state.model
+                Box(
+                    Modifier.clip(RoundedCornerShape(20.dp)).background(if (sel) Accent else Card)
+                        .clickable { engine.setModel(m) }.padding(horizontal = 18.dp, vertical = 8.dp)
+                ) { Text("${m.label} · ${m.kind}", color = if (sel) Color.Black else Color.White, fontSize = 18.sp) }
+            }
+            Small("붕붕이는 내 차를 닮은 모습으로 태어나요", size = 15)
+        }
         Small("지금까지 만나 본 모습 ${state.avatar.collected.size} / ${Stage.entries.size}")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Stage.entries.reversed().forEach { st ->
                 val got = st in state.avatar.collected
-                Panel(Modifier.weight(1f).height(360.dp)) {
+                Panel(Modifier.weight(1f).height(560.dp)) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Big(if (got) st.label else "???", size = 26)
                         Small("${st.minScore}점 이상", size = 15)
                         Box(Modifier.fillMaxWidth().weight(1f).alpha(if (got) 1f else 0.15f)) {
-                            CarAvatar(st, AvatarPart.NONE, Mood.CALM, Modifier.fillMaxSize())
+                            CarAvatar(st, AvatarPart.NONE, Mood.CALM, Modifier.fillMaxSize(), state.model)
                         }
                         Small(if (got) st.look else "아직 못 만났어요", size = 14)
                     }
@@ -408,7 +420,7 @@ private fun DemoButton(text: String, color: Color, enabled: Boolean = true, onCl
 
 /** 진화·퇴화·탄생 연출 */
 @Composable
-private fun ChangeOverlay(change: StageChange, part: AvatarPart, onDone: () -> Unit) {
+private fun ChangeOverlay(change: StageChange, part: AvatarPart, model: CarModel, onDone: () -> Unit) {
     var show by remember(change) { mutableStateOf(false) }
     var revealed by remember(change) { mutableStateOf(false) }
     LaunchedEffect(change) {
@@ -430,9 +442,9 @@ private fun ChangeOverlay(change: StageChange, part: AvatarPart, onDone: () -> U
                 Box(Modifier.size(620.dp, 460.dp)) {
                     if (!revealed) {
                         if (change.isBirth) EggAvatar(80.0, 1f, Modifier.fillMaxSize())
-                        else CarAvatar(change.from!!, AvatarPart.NONE, Mood.CALM, Modifier.fillMaxSize().alpha(0.4f + 0.6f * flash))
+                        else CarAvatar(change.from!!, AvatarPart.NONE, Mood.CALM, Modifier.fillMaxSize().alpha(0.4f + 0.6f * flash), model)
                     } else {
-                        CarAvatar(change.to, part, if (change.isBirth || change.isUp) Mood.HAPPY else Mood.CALM, Modifier.fillMaxSize())
+                        CarAvatar(change.to, part, if (change.isBirth || change.isUp) Mood.HAPPY else Mood.CALM, Modifier.fillMaxSize(), model)
                     }
                 }
                 Small(if (revealed) "${change.to.look} · 화면을 누르면 닫혀요" else "두근두근…", size = 20)
