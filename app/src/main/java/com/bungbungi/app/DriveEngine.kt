@@ -56,9 +56,9 @@ data class EngineState(
     /** 아직 보여주지 않은 진화·퇴화 */
     val pendingChange: StageChange? = null,
     val lastFinishedTrip: TripRecord? = null,
-) {
-    val upset: Boolean get() = lastViolation != null && now - lastViolation.atMillis < 8_000
-}
+    /** 최근 8초 안에 위반이 있었음 (아바타 어지러움, 조명 주황) */
+    val upset: Boolean = false,
+)
 
 /**
  * 앱의 심장. 신호를 모아 0.25초마다 감지기에 넣고, 주행이 끝나면 점수를 저장하고 아바타를 다시 계산한다.
@@ -158,8 +158,8 @@ class DriveEngine(private val context: Context) {
             result.violations.forEach { onViolation(it) }
             result.bonuses.forEach { b -> hub.log("보너스: ${b.type.label}"); voice.say(Lines.bonus(b.type)) }
 
-            // 주행 종료: P단 또는 20초 이상 정차 (실차 기준)
-            if (frame == null) {
+            // 주행 종료: P단 또는 20초 이상 정차 (실차 기준). 시연 주행은 시나리오가 끝날 때 종료한다.
+            if (frame == null && trip.demoTitle == null) {
                 if (!moving) {
                     val since = stoppedSince ?: realNow.also { stoppedSince = it }
                     if (sig.gear == "PARK" || realNow - since > 20_000) {
@@ -176,6 +176,8 @@ class DriveEngine(private val context: Context) {
                 now = t - t % 1_000, speedKmh = speed?.let { v -> Math.round(v * 10) / 10f }, speedSource = src, trip = trip,
                 demoCaption = frame?.caption,
                 lastViolation = trip?.events?.lastOrNull() ?: it.lastViolation,
+                // 위반 시각은 실제 시각이라 가상 시계(now)가 아니라 실제 시각과 비교한다
+                upset = trip != null && (trip.events.lastOrNull()?.let { e -> realNow - e.atMillis < 8_000 } == true),
             )
         }
         updateAmbient()
