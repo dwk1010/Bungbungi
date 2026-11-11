@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -77,7 +78,7 @@ fun BungApp(engine: DriveEngine, state: EngineState, signals: VehicleSignals, lo
         if (driving && tab == Tab.HOME) tab = Tab.DRIVE
         if (!driving && tab == Tab.DRIVE) tab = Tab.HOME
     }
-    Row(Modifier.fillMaxSize().background(Bg)) {
+    Row(Modifier.fillMaxSize().background(Bg).safeDrawingPadding()) {
         Column(Modifier.width(150.dp).fillMaxHeight().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("붕붕이", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(8.dp))
             Tab.entries.forEach { t ->

@@ -274,7 +274,7 @@ class DriveEngine(private val context: Context) {
     /** 하루치 주행을 빠르게 기록 (시연에서 2주를 몇 분으로 압축할 때) */
     fun addQuickDay(rough: Boolean) {
         val t = now()
-        val counts = if (rough) mapOf(Violation.SPEEDING to 1, Violation.HARSH_ACCEL to 1, Violation.NO_SIGNAL_LANE_CHANGE to 1)
+        val counts = if (rough) mapOf(Violation.SPEEDING to 2, Violation.HARSH_ACCEL to 4, Violation.HARSH_BRAKE to 2, Violation.NO_SIGNAL_LANE_CHANGE to 2) // 25km에 4점: 계속되면 난폭까지 내려감
         else emptyMap()
         val km = if (rough) 25.0 else 30.0
         val rec = TripRecord(t, t - 3_600_000, t, km, counts, if (rough) 0 else 1)

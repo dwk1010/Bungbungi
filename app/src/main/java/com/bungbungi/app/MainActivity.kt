@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -25,6 +26,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 차량 화면의 위·아래 시스템 바에 가려지지 않게, 화면 여백(inset)을 직접 받아서 처리한다
+        enableEdgeToEdge()
         permissions.launch(
             arrayOf(
                 NaviLocationSource.PERMISSION,
