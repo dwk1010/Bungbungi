@@ -20,6 +20,12 @@ object Lines {
         BonusType.CLEAN_30KM -> "30킬로미터 동안 아주 부드러웠어요. 저 기분 최고예요!"
     }
 
+    fun quests(qs: List<com.bungbungi.app.logic.Quest>): String = when {
+        qs.isEmpty() -> ""
+        qs.size == 1 -> " 도전과제 ${qs[0].label} 성공, ${qs[0].points}점 더했어요!"
+        else -> " 도전과제 ${qs.size}개 성공, ${qs.sumOf { it.points }}점 더했어요!"
+    }
+
     fun greeting(stage: Stage?, born: Boolean): String = when {
         !born -> "알 속에서 듣고 있어요. 오늘도 부드럽게 달려 주세요."
         stage == Stage.ANGEL -> "안녕하세요! 오늘도 날개가 반짝반짝해요. 이대로만 가요."

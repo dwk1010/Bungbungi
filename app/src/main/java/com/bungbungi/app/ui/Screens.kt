@@ -52,6 +52,9 @@ import com.bungbungi.app.demo.Scenarios
 import com.bungbungi.app.logic.AvatarEngine
 import com.bungbungi.app.logic.AvatarPart
 import com.bungbungi.app.logic.CarModel
+import com.bungbungi.app.logic.Quest
+import com.bungbungi.app.logic.QuestScope
+import com.bungbungi.app.logic.Quests
 import com.bungbungi.app.logic.Scoring
 import com.bungbungi.app.logic.Stage
 import com.bungbungi.app.logic.StageChange
@@ -69,7 +72,7 @@ val Muted = Color(0xFF8A96AD)
 val Good = Color(0xFF5BD68A)
 val Warn = Color(0xFFFFA24C)
 
-enum class Tab(val label: String) { HOME("붕붕이"), DRIVE("주행"), BOOK("도감"), TRIPS("기록"), SIGNALS("신호"), DEMO("시연") }
+enum class Tab(val label: String) { HOME("붕붕이"), DRIVE("주행"), QUEST("도전"), BOOK("도감"), TRIPS("기록"), SIGNALS("신호"), DEMO("시연") }
 
 @Composable
 fun BungApp(engine: DriveEngine, state: EngineState, signals: VehicleSignals, log: List<String>) {
@@ -96,6 +99,7 @@ fun BungApp(engine: DriveEngine, state: EngineState, signals: VehicleSignals, lo
             when (tab) {
                 Tab.HOME -> HomeScreen(engine, state)
                 Tab.DRIVE -> DriveScreen(engine, state)
+                Tab.QUEST -> QuestScreen(state)
                 Tab.BOOK -> BookScreen(engine, state)
                 Tab.TRIPS -> TripsScreen(state)
                 Tab.SIGNALS -> SignalsScreen(state, signals, log)
@@ -144,6 +148,8 @@ private fun HomeScreen(engine: DriveEngine, state: EngineState) {
         Panel(Modifier.weight(1.2f).fillMaxHeight()) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Big(if (a.born) "${a.stage.label} 붕붕이" else "알 속의 붕붕이", size = 40)
+                val qTotal = Quests.counts(state.trips, a.weeklyQuests).values.sum()
+                Text("🏅 ${Quests.tierFor(qTotal).name}", color = Color(0xFFFFD36B), fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Small(
                     when {
                         !a.born -> "운전 습관을 먹으며 자라는 중이에요"
@@ -172,6 +178,7 @@ private fun HomeScreen(engine: DriveEngine, state: EngineState) {
                         Spacer(Modifier.height(8.dp))
                         Small("방금 주행: %.1fkm · %d점 · %s".format(t.distanceKm, t.score,
                             if (t.counts.isEmpty()) "위반 없음" else t.counts.entries.joinToString { "${it.key.label} ${it.value}" }))
+                        if (t.quests.isNotEmpty()) Small("도전과제 ${t.quests.size}개 성공 (+${Quests.points(t.quests)}점): " + t.quests.joinToString { it.label }, Good)
                     }
                 }
             }
@@ -449,6 +456,104 @@ private fun ChangeOverlay(change: StageChange, part: AvatarPart, model: CarModel
                 }
                 Small(if (revealed) "${change.to.look} · 화면을 누르면 닫혀요" else "두근두근…", size = 20)
             }
+        }
+    }
+}
+
+
+/** 도전과제와 호칭 */
+@Composable
+private fun QuestScreen(state: EngineState) {
+    val counts = Quests.counts(state.trips, state.avatar.weeklyQuests)
+    val total = counts.values.sum()
+    val tier = Quests.tierFor(total)
+    val next = Quests.nextTier(total)
+    val specials = Quests.specialTitles(counts)
+    val week = AvatarEngine.thisWeekTrips(state.avatar, state.trips, state.now)
+    val weekKm = week.sumOf { it.distanceKm }
+    fun weekTotal(v: com.bungbungi.app.logic.Violation) = week.sumOf { it.counts[v] ?: 0 }
+    val lastTrip = state.lastFinishedTrip
+
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.weight(1.25f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Big("도전과제")
+            Small("성공하면 점수를 더해 줘요. 실패해도 깎이지 않아요.")
+            Panel(Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(QuestScope.TRIP.label + " · 3km 이상 주행마다", color = Accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Quest.entries.filter { it.scope == QuestScope.TRIP }.forEach { q ->
+                        QuestRow(q, done = lastTrip?.quests?.contains(q) == true, doneLabel = "방금 성공", count = counts[q] ?: 0, progress = null)
+                    }
+                }
+            }
+            Panel(Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(QuestScope.WEEK.label + " · 이번 주 %.1fkm 주행".format(weekKm), color = Accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    val brakes = weekTotal(com.bungbungi.app.logic.Violation.HARSH_BRAKE)
+                    val speeding = weekTotal(com.bungbungi.app.logic.Violation.SPEEDING) + weekTotal(com.bungbungi.app.logic.Violation.ZONE_SPEEDING)
+                    val clean = week.all { it.violationTotal == 0 }
+                    QuestRow(Quest.WEEK_BRAKE, state.avatar.lastWeekQuests.contains(Quest.WEEK_BRAKE), "지난주 성공", counts[Quest.WEEK_BRAKE] ?: 0,
+                        "급감속 ${brakes}회 / 3회 이내 · 거리 %.0f / 20km".format(weekKm))
+                    QuestRow(Quest.WEEK_NO_SPEEDING, state.avatar.lastWeekQuests.contains(Quest.WEEK_NO_SPEEDING), "지난주 성공", counts[Quest.WEEK_NO_SPEEDING] ?: 0,
+                        "과속 ${speeding}회 · 거리 %.0f / 20km".format(weekKm))
+                    QuestRow(Quest.WEEK_CLEAN_50, state.avatar.lastWeekQuests.contains(Quest.WEEK_CLEAN_50), "지난주 성공", counts[Quest.WEEK_CLEAN_50] ?: 0,
+                        if (clean) "무위반 %.0f / 50km".format(weekKm) else "이번 주는 위반이 있어 다음 주에 도전")
+                    Small("주간 과제는 매주 아바타가 다시 정해질 때 확인하고, 성공하면 아바타 점수에 더해요.", size = 14)
+                }
+            }
+        }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Panel(Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Small("내 호칭")
+                    Text("🏅 ${tier.name}", color = Color(0xFFFFD36B), fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                    Small("지금까지 달성한 도전과제 ${total}개")
+                    if (next != null) {
+                        LinearProgressIndicator(
+                            progress = { ((total - tier.need).toFloat() / (next.need - tier.need)).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)), color = Color(0xFFFFD36B),
+                        )
+                        Small("'${next.name}'까지 ${next.need - total}개 남았어요")
+                    } else Small("최고 호칭이에요!")
+                    if (specials.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        Small("특별 호칭 (같은 과제 ${Quests.SPECIAL_TITLE_COUNT}번 달성)")
+                        specials.forEach { Text("✨ $it", color = Color.White, fontSize = 20.sp) }
+                    }
+                }
+            }
+            Panel(Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Small("호칭 단계")
+                    Quests.tiers.forEach { t ->
+                        val got = total >= t.need
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (got) "🏅" else "🔒", fontSize = 18.sp, modifier = Modifier.width(34.dp))
+                            Text(t.name, color = if (got) Color.White else Muted, fontSize = 19.sp, modifier = Modifier.weight(1f))
+                            Small("${t.need}개", size = 15)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuestRow(q: Quest, done: Boolean, doneLabel: String, count: Int, progress: String?) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (done) Good.copy(alpha = 0.15f) else Color(0xFF222B3F)).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(if (done) "✅" else "⬜", fontSize = 20.sp, modifier = Modifier.width(36.dp))
+        Column(Modifier.weight(1f)) {
+            Text(q.label + if (done) " · $doneLabel" else "", color = if (done) Good else Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+            Small(q.desc, size = 15)
+            if (progress != null) Small(progress, Accent, size = 15)
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text("+${q.points}점", color = Color(0xFFFFD36B), fontSize = 19.sp, fontWeight = FontWeight.Bold)
+            Small("누적 ${count}회", size = 14)
         }
     }
 }

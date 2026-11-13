@@ -37,6 +37,7 @@ class Store(context: Context) {
                 distanceKm = o.getDouble("km"),
                 counts = Violation.entries.associateWith { c.optInt(it.name, 0) }.filterValues { it > 0 },
                 bonusCount = o.optInt("bonus", 0),
+                quests = o.optJSONArray("quests")?.let { q -> (0 until q.length()).mapNotNull { k -> runCatching { com.bungbungi.app.logic.Quest.valueOf(q.getString(k)) }.getOrNull() } } ?: emptyList(),
             )
         }
     }
@@ -47,6 +48,7 @@ class Store(context: Context) {
             arr.put(JSONObject().apply {
                 put("id", t.id); put("start", t.startMillis); put("end", t.endMillis); put("km", t.distanceKm)
                 put("bonus", t.bonusCount)
+                put("quests", JSONArray(t.quests.map { it.name }))
                 put("counts", JSONObject().apply { t.counts.forEach { (k, v) -> put(k.name, v) } })
             })
         }
@@ -69,6 +71,8 @@ class Store(context: Context) {
             resting = o.optBoolean("resting"),
             collected = (0 until col.length()).map { Stage.valueOf(col.getString(it)) }.toSet(),
             lastChange = change,
+            weeklyQuests = o.optJSONObject("weekly")?.let { w -> com.bungbungi.app.logic.Quest.entries.associateWith { w.optInt(it.name, 0) }.filterValues { it > 0 } } ?: emptyMap(),
+            lastWeekQuests = o.optJSONArray("lastWeek")?.let { q -> (0 until q.length()).mapNotNull { k -> runCatching { com.bungbungi.app.logic.Quest.valueOf(q.getString(k)) }.getOrNull() } } ?: emptyList(),
         )
     }
 
@@ -77,6 +81,8 @@ class Store(context: Context) {
             put("install", a.installMillis); put("born", a.born); put("stage", a.stage.name); put("part", a.part.name)
             put("lastEval", a.lastEvalMillis); put("resting", a.resting)
             put("collected", JSONArray(a.collected.map { it.name }))
+            put("weekly", JSONObject().apply { a.weeklyQuests.forEach { (k, v) -> put(k.name, v) } })
+            put("lastWeek", JSONArray(a.lastWeekQuests.map { it.name }))
             a.lastChange?.let { c -> put("change", JSONObject().apply { put("from", c.from?.name ?: ""); put("to", c.to.name); put("at", c.atMillis) }) }
         }
         prefs.edit().putString("avatar", o.toString()).apply()

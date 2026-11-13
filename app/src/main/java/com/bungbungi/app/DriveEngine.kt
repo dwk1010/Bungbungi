@@ -219,25 +219,51 @@ class DriveEngine(private val context: Context) {
             _state.update { it.copy(trip = null, demoCaption = null) }
             return
         }
+        val quests = com.bungbungi.app.logic.Quests.tripQuests(trip.distanceKm, trip.counts)
+        val titleBefore = titleTotal()
         val record = TripRecord(
             id = System.currentTimeMillis(), startMillis = trip.startMillis, endMillis = now(),
-            distanceKm = trip.distanceKm, counts = trip.counts, bonusCount = trip.bonuses.size,
+            distanceKm = trip.distanceKm, counts = trip.counts, bonusCount = trip.bonuses.size, quests = quests,
         )
         val trips = s.trips + record
         store.saveTrips(trips)
         hub.log("주행 종료: %.1fkm, %d점".format(record.distanceKm, record.score))
         _state.update { it.copy(trip = null, trips = trips, lastFinishedTrip = record, demoCaption = null) }
         reevaluate()
-        voice.say("수고했어요. 이번 주행은 %.0f킬로미터, %d점이에요.".format(record.distanceKm, record.score))
+        quests.forEach { hub.log("도전과제 성공: ${it.label} +${it.points}점") }
+        voice.say("수고했어요. 이번 주행은 %.0f킬로미터, %d점이에요.".format(record.distanceKm, record.score) + Lines.quests(quests))
+        announceTitle(titleBefore)
+    }
+
+    /** 지금까지 달성한 도전과제 수 */
+    fun titleTotal(): Int {
+        val s = _state.value
+        return com.bungbungi.app.logic.Quests.counts(s.trips, s.avatar.weeklyQuests).values.sum()
+    }
+
+    private fun announceTitle(before: Int) {
+        val after = titleTotal()
+        val t0 = com.bungbungi.app.logic.Quests.tierFor(before)
+        val t1 = com.bungbungi.app.logic.Quests.tierFor(after)
+        if (t1 != t0) {
+            hub.log("새 호칭: ${t1.name}")
+            voice.say("축하해요! 새 호칭 ${t1.name}을 얻었어요.")
+        }
     }
 
     private fun reevaluate() {
         val s = _state.value
+        val before = titleTotal()
         val updated = AvatarEngine.evaluate(s.avatar, s.trips, now())
         store.saveAvatar(updated)
         val change = updated.lastChange?.takeIf { it != s.avatar.lastChange }
         _state.update { it.copy(avatar = updated, now = now(), pendingChange = change ?: it.pendingChange) }
         change?.let { voice.say(Lines.change(it.from, it.to)) }
+        if (updated.lastEvalMillis != s.avatar.lastEvalMillis && updated.lastWeekQuests.isNotEmpty()) {
+            updated.lastWeekQuests.forEach { hub.log("주간 과제 성공: ${it.label} +${it.points}점") }
+            if (change == null) voice.say("이번 주 도전과제를 ${updated.lastWeekQuests.size}개 달성했어요!")
+        }
+        announceTitle(before)
     }
 
     fun consumeChange() = _state.update { it.copy(pendingChange = null) }
@@ -279,10 +305,12 @@ class DriveEngine(private val context: Context) {
         val counts = if (rough) mapOf(Violation.SPEEDING to 2, Violation.HARSH_ACCEL to 4, Violation.HARSH_BRAKE to 2, Violation.NO_SIGNAL_LANE_CHANGE to 2) // 25km에 4점: 계속되면 난폭까지 내려감
         else emptyMap()
         val km = if (rough) 25.0 else 30.0
-        val rec = TripRecord(t, t - 3_600_000, t, km, counts, if (rough) 0 else 1)
+        val rec = TripRecord(t, t - 3_600_000, t, km, counts, if (rough) 0 else 1, com.bungbungi.app.logic.Quests.tripQuests(km, counts))
+        val before = titleTotal()
         val trips = _state.value.trips + rec
         store.saveTrips(trips)
         _state.update { it.copy(trips = trips) }
+        announceTitle(before)
         advanceDays(1)
     }
 

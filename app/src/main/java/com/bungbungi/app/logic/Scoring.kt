@@ -11,19 +11,21 @@ data class TripRecord(
     val distanceKm: Double,
     val counts: Map<Violation, Int>,
     val bonusCount: Int,
+    /** 이 주행에서 달성한 주행 과제 */
+    val quests: List<Quest> = emptyList(),
 ) {
-    val score: Int get() = Scoring.tripScore(distanceKm, counts, bonusCount)
+    val score: Int get() = Scoring.tripScore(distanceKm, counts, bonusCount, Quests.points(quests))
     val violationTotal: Int get() = counts.values.sum()
 }
 
 object Scoring {
     const val BONUS_POINTS = 2
 
-    /** S_trip = clamp(100 - Σ w_i · n_i / d · 100 + B, 0, 100). 거리가 0에 가까우면 1km로 본다. */
-    fun tripScore(distanceKm: Double, counts: Map<Violation, Int>, bonusCount: Int): Int {
+    /** S_trip = clamp(100 - Σ w_i · n_i / d · 100 + B + Q, 0, 100). Q는 도전과제 가산점. 거리가 0에 가까우면 1km로 본다. */
+    fun tripScore(distanceKm: Double, counts: Map<Violation, Int>, bonusCount: Int, questPoints: Int = 0): Int {
         val d = max(distanceKm, 1.0)
         val penalty = counts.entries.sumOf { (v, n) -> v.penalty * n / d * 100.0 }
-        val raw = 100.0 - penalty + bonusCount * BONUS_POINTS
+        val raw = 100.0 - penalty + bonusCount * BONUS_POINTS + questPoints
         return min(100.0, max(0.0, raw)).toInt()
     }
 

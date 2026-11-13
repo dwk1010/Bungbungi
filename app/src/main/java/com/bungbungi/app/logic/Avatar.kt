@@ -24,6 +24,10 @@ data class AvatarState(
     val collected: Set<Stage> = emptySet(),
     /** 마지막 단계 변화. 화면에서 진화·퇴화 연출을 한 번 보여주고 지운다. */
     val lastChange: StageChange? = null,
+    /** 주간 과제 누적 달성 횟수 */
+    val weeklyQuests: Map<Quest, Int> = emptyMap(),
+    /** 가장 최근 주간 평가에서 달성한 주간 과제 */
+    val lastWeekQuests: List<Quest> = emptyList(),
 )
 
 data class StageChange(val from: Stage?, val to: Stage, val atMillis: Long) {
@@ -62,11 +66,14 @@ object AvatarEngine {
             val evalAt = s.lastEvalMillis + CYCLE_DAYS * DAY
             val week = tripsIn(trips, evalAt - CYCLE_DAYS * DAY, evalAt)
             if (week.sumOf { it.distanceKm } < MIN_WEEK_KM) {
-                s = s.copy(lastEvalMillis = evalAt, resting = true)
+                s = s.copy(lastEvalMillis = evalAt, resting = true, lastWeekQuests = emptyList())
                 continue
             }
             val window = tripsIn(trips, evalAt - WINDOW_DAYS * DAY, evalAt)
-            val target = Stage.forScore(Scoring.weightedScore(window) ?: s.stage.minScore.toDouble())
+            // 주간 과제를 달성하면 그만큼 아바타 점수에 가산점 (감점은 없음)
+            val weekDone = Quests.weekQuests(week)
+            val base = Scoring.weightedScore(window) ?: s.stage.minScore.toDouble()
+            val target = Stage.forScore(minOf(100.0, base + Quests.points(weekDone)))
             val next = when {
                 target.ordinal > s.stage.ordinal -> Stage.entries[s.stage.ordinal + 1]
                 target.ordinal < s.stage.ordinal -> Stage.entries[s.stage.ordinal - 1]
@@ -76,6 +83,8 @@ object AvatarEngine {
                 stage = next, lastEvalMillis = evalAt, resting = false,
                 part = partFor(next, window), collected = s.collected + next,
                 lastChange = if (next != s.stage) StageChange(s.stage, next, evalAt) else s.lastChange,
+                weeklyQuests = s.weeklyQuests + weekDone.associateWith { (s.weeklyQuests[it] ?: 0) + 1 },
+                lastWeekQuests = weekDone,
             )
         }
         return s
@@ -84,6 +93,10 @@ object AvatarEngine {
     /** 현재 진행 중인 2주 점수 (알 색깔, 다음 단계 예상에 사용) */
     fun currentScore(trips: List<TripRecord>, now: Long): Double? =
         Scoring.weightedScore(tripsIn(trips, now - WINDOW_DAYS * DAY, now + 1))
+
+    /** 이번 주(마지막 평가 이후) 주행 */
+    fun thisWeekTrips(state: AvatarState, trips: List<TripRecord>, now: Long): List<TripRecord> =
+        tripsIn(trips, if (state.born) state.lastEvalMillis else now - CYCLE_DAYS * DAY, now + 1)
 
     fun nextEvalMillis(state: AvatarState): Long =
         if (!state.born) state.installMillis + HATCH_DAYS * DAY else state.lastEvalMillis + CYCLE_DAYS * DAY
