@@ -130,7 +130,7 @@ fun AvatarFor(state: EngineState, modifier: Modifier, mood: Mood = Mood.CALM) {
         val progress = ((state.now - a.installMillis).toFloat() / total).coerceIn(0f, 1f)
         EggAvatar(AvatarEngine.currentScore(state.trips, state.now), progress, modifier)
     } else {
-        CarAvatar(a.stage, a.part, if (a.resting) Mood.SLEEPY else mood, modifier, state.model)
+        GarageScene(a.stage, a.part, if (a.resting) Mood.SLEEPY else mood, modifier, state.model)
     }
 }
 
@@ -284,7 +284,7 @@ private fun BookScreen(engine: DriveEngine, state: EngineState) {
                         Big(if (got) st.label else "???", size = 26)
                         Small("${st.minScore}점 이상", size = 15)
                         Box(Modifier.fillMaxWidth().weight(1f).alpha(if (got) 1f else 0.15f)) {
-                            CarAvatar(st, AvatarPart.NONE, Mood.CALM, Modifier.fillMaxSize(), state.model)
+                            GarageScene(st, AvatarPart.NONE, Mood.CALM, Modifier.fillMaxSize(), state.model)
                         }
                         Small(if (got) st.look else "아직 못 만났어요", size = 14)
                     }
@@ -449,9 +449,9 @@ private fun ChangeOverlay(change: StageChange, part: AvatarPart, model: CarModel
                 Box(Modifier.size(620.dp, 460.dp)) {
                     if (!revealed) {
                         if (change.isBirth) EggAvatar(80.0, 1f, Modifier.fillMaxSize())
-                        else CarAvatar(change.from!!, AvatarPart.NONE, Mood.CALM, Modifier.fillMaxSize().alpha(0.4f + 0.6f * flash), model)
+                        else GarageScene(change.from!!, AvatarPart.NONE, Mood.CALM, Modifier.fillMaxSize().alpha(0.4f + 0.6f * flash), model)
                     } else {
-                        CarAvatar(change.to, part, if (change.isBirth || change.isUp) Mood.HAPPY else Mood.CALM, Modifier.fillMaxSize(), model)
+                        GarageScene(change.to, part, if (change.isBirth || change.isUp) Mood.HAPPY else Mood.CALM, Modifier.fillMaxSize(), model)
                     }
                 }
                 Small(if (revealed) "${change.to.look} · 화면을 누르면 닫혀요" else "두근두근…", size = 20)
