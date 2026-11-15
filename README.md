@@ -17,6 +17,11 @@
 
 ![아바타 5단계](docs/screens/avatar_stages.png)
 
+### 다른 디자인 시안
+캐릭터형 차 디자인도 있습니다.
+
+![캐릭터형 시안 5단계](docs/screens/avatar_alt_character.png)
+
 ### 홈
 붕붕이 단계와 호칭, 오늘 주행, 다음 변화까지 남은 기간과 점수를 보여 줍니다.
 
