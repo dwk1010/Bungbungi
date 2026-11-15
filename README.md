@@ -6,7 +6,7 @@
 
 - **앱 이름**: 붕붕이
 - **팀명**: 붕붕이 (대학생 부문 3인 팀)
-- **APK 위치**: `apk/` 폴더 (`붕붕이_붕붕이_release.apk`)
+- **APK 위치**: [`apk/붕붕이_붕붕이_release.apk`](apk/붕붕이_붕붕이_release.apk) (release 빌드, 약 41MB)
 - **시연 영상**: `docs/붕붕이_시연영상.mp4` (에뮬레이터 화면 녹화, 약 2분 30초, 소리 없음)
 - **아바타 5단계**: `docs/screens/avatar_stages.png` (차고와 운전자는 그대로, 점수가 내려갈수록 차에 스크래치·진흙·반창고·찌그러짐이 생김)
 
@@ -34,10 +34,20 @@
 
 | 항목 | 값 |
 |---|---|
-| 실행 대상 | Pleos Connect Emulator v2.1.0 (Android 14, API 34) |
+| 실행 대상 | Pleos Connect Emulator v2.1.0 (Android 14, API 34, AVD 이름 `Pleos_Connect_v2.1`) |
+| 화면 규격 | 2560 × 1440, 160 dpi (가로). 앱은 분할 화면의 오른쪽 영역(약 1682 × 1210)에서 실행 |
+| 개발 PC | macOS (Apple Silicon), RAM 8GB |
 | minSdk / targetSdk | 28 / 35 |
 | 빌드 도구 | Android Studio, Gradle 8.10.2, AGP 8.8.2, Kotlin 2.0.0, JDK 17~21 |
 | Pleos SDK | Vehicle 2.3.2, NaviHelper 3.0.5, FusedLocation 1.1.3, TextToSpeech 3.3.1, SpeechToText 3.3.1 |
+
+## 필요한 설정
+
+- 별도 서버·로그인·API 키가 필요 없습니다. 모든 데이터는 앱 내부 저장소에 저장됩니다.
+- 처음 실행할 때 위치(FusedLocation)·마이크(음성 질문) 권한을 허용해 주세요. `adb install -g`로 설치하면 자동으로 허용됩니다.
+- Pleos 차량 권한(`pleos.car.permission.*`)은 설치 시 자동으로 부여됩니다.
+- 에뮬레이터가 오래 켜져 있어 차량 신호가 멈추면 에뮬레이터를 다시 시작해 주세요.
+- 안전벨트 미착용 경고 신호는 에뮬레이터에서 지원되지 않아, 시연 탭의 '난폭 주행' 시나리오로 확인할 수 있습니다.
 
 ## 실행 방법
 
