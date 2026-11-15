@@ -2,11 +2,11 @@ package com.bungbungi.app.logic
 
 /** 아바타 5단계 (낮은 것부터). */
 enum class Stage(val label: String, val minScore: Int, val look: String) {
-    WILD("난폭", 0, "불꽃 눈, 날카로운 이빨, 연기, 찌그러진 범퍼"),
-    GRUMPY("까칠", 40, "찡그린 눈썹, 흐린 색, 작은 흠집"),
-    NORMAL("보통", 60, "무표정, 기본 색"),
-    GENTLE("순둥", 75, "둥글고 웃는 눈, 밝은 색"),
-    ANGEL("천사", 90, "반짝이는 눈, 파스텔 색, 날개와 링");
+    WILD("난폭", 0, "찌그러진 범퍼, 금 간 유리, 반창고 여러 개, 연기"),
+    GRUMPY("까칠", 40, "스크래치, 진흙, 반창고, 빛바랜 차"),
+    NORMAL("보통", 60, "옆문 스크래치, 살짝 먼지"),
+    GENTLE("순둥", 75, "깨끗한 기본 상태"),
+    ANGEL("천사", 90, "광택이 나고 반짝이는 차");
 
     companion object {
         fun forScore(score: Double): Stage = entries.last { score >= it.minScore }
